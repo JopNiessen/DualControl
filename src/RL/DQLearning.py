@@ -1,34 +1,46 @@
 """
+Deep Q-Learning
 
-
-
+by J. Niessen
+created on: 2022.11.19
 """
 
 import numpy as np
 import jax.numpy as jnp
-import jax.random as jrandom
-import jax
-
-from jax import value_and_grad
 
 
 class DQLearning:
-    def __init__(self, DeepNet, n_obs):
-        self.ctrl = jnp.array([-1, 1])
+    def __init__(self, DeepNet, n_obs, ctrl=jnp.array([-1, 1])):
+        """
+        Deep Q-Learning class
+        :param DeepNet: Neural network (class)
+        :param n_obs: number of observable variables (int)
+        :param ctrl: vector of possible control actions (vector)
+        """
+        self.ctrl = ctrl
 
         self.n_ctrl = len(self.ctrl)
         self.n_obs = n_obs
 
         self.loss_func = quadratic_loss
-        self.gamma = .9     # Discount factor
+        self.gamma = .9         # Discount factor
 
         self.network = DeepNet
         
-        self.epsilon = .9   # Exploration rate
+        """epsilon-greedy exploration"""
+        self.epsilon = .9       # Exploration rate
         self.epsilon_min = .1
         self.decay = .95
 
     def update(self, y0, y1, u, r0):
+        """
+        Update Q-network
+        :param y0: observation at time t
+        :param y1: observation at time t+1
+        :param u: control at time t
+        :param r0: reward (negative cost) at time t
+        :return: loss
+        """
         u_idx = np.int(np.where(self.ctrl == u)[0])
         q1_hat = self.network.predict(y1)
         q0_hat = self.network.predict(y0, learning=True)
@@ -40,15 +52,30 @@ class DQLearning:
         return loss
     
     def get_qval(self, y):
+        """
+        Get Q-values for observation y
+        :param y: observation
+        :return: Q-values
+        """
         q_hat = self.network.predict(y)
         return q_hat
 
     def optimal_control(self, y):
+        """
+        Return optimal control
+        :param y: observation
+        :return: optimal control (u*)
+        """
         q_hat = self.network.predict(y)
         u_idx = jnp.argmax(q_hat)
         return self.ctrl[u_idx]
 
     def get_control(self, y):
+        """
+        Choose control using epsilon-greedy exploration
+        :param y: observation
+        :return: control (u)
+        """
         if np.random.random() < self.epsilon:
             return np.random.choice(self.ctrl)
         else:
@@ -56,7 +83,13 @@ class DQLearning:
 
 
 
+"""Loss functions"""
+def quadratic_loss(target, estimate):
+    return(target - estimate)**2
 
+
+
+"""
 class NQLearning:
     def __init__(self, n_obs, key=jrandom.PRNGKey(0)):
         self.ctrl = jnp.array([-1, 1])
@@ -97,8 +130,5 @@ class NQLearning:
             return self.optimal_control(y)
 
 
-"""Loss functions"""
-
-def quadratic_loss(target, estimate):
-    return(target - estimate)**2
+"""
 
