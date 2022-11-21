@@ -37,7 +37,7 @@ class StochasticDoubleIntegrator:
         """Cost parameters"""
         self.F = jnp.array([[1, 0], [0, 0]])
         self.G = jnp.array([[1, 0], [0, 0]])
-        self.R = .1
+        self.R = .5
         self.T = time_horizon
 
         """Fully observable parameters"""
