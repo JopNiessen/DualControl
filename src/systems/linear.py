@@ -26,6 +26,7 @@ class StochasticDoubleIntegrator:
         self.x = x0
         self.dt = dt
         self.dim = len(x0)
+        self.boundary = jnp.inf
 
         """System parameters"""
         self.A = jnp.array([[0, 1], [0, -k]])
@@ -62,7 +63,10 @@ class StochasticDoubleIntegrator:
         x_prev = self.x
         self.x = self.get_state_update(key, self.x, u)
         if info:
-            return self.x, self.cost(x_prev, u)
+            if abs(self.x[0]) <= self.boundary:
+                return self.x, self.cost(x_prev, u), False
+            else:
+                return self.x, self.cost(x_prev, u), True
 
     def get_state_update(self, key, x, u):
         xi = jrandom.normal(key, (self.dim, ))
