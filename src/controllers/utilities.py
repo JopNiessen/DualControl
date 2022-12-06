@@ -7,6 +7,34 @@ import jax.random as jrandom
 import numpy as np
 
 
+""" Methods for Soft Actor-Critic """
+
+def run_SAC(key, system, controller, T):
+    key, subkey = jrandom.split(key)
+    time_horizon = np.arange(0, T, system.dt)
+
+    for _ in time_horizon:
+        s0_estimate = system.observe(key)
+        u, _ = controller.get_control(s0_estimate)
+        _, cost, done = system.update(key, u, info=True)
+        s1_estimate = system.observe(subkey)
+        controller.add_to_buffer((s0_estimate, u, -cost, s1_estimate))
+
+        controller.update(s0_estimate, u)
+        
+        # step
+        key, subkey = jrandom.split(key)
+
+        if done:
+            x0 = jrandom.normal(key, (2,))*2
+            system.reset(x0)
+    
+    return system, controller, time_horizon
+
+
+
+""" Methods for Deep Q-learning and REINFORCE """
+
 def run_controlled_environment(key, controller, system, T, 
                         learning=True, training_wheels=False,
                         method='ValueFunction'):
@@ -21,12 +49,15 @@ def run_controlled_environment(key, controller, system, T,
     U = np.zeros(n_steps)
     C = np.zeros(n_steps)
     L = np.zeros(n_steps)
+    P = np.zeros(n_steps)
+    M = np.zeros(n_steps)
 
     if training_wheels:
         system.boundary = 5
         tw_increase = 0
 
     for ti, t in enumerate(time_horizon):
+        P[ti] = np.arctan2(controller.params[0, 0], controller.params[0, 1])
 
         if method == 'ValueFunction':
             controller, system, state, u_star, cost, loss, done = ValueFunction_step(key, system, controller, learning)
@@ -41,13 +72,15 @@ def run_controlled_environment(key, controller, system, T,
         U[ti] = u_star
         C[ti] = cost
         L[ti] = loss
+        M[ti] = np.linalg.norm(controller.params[0])
 
         if training_wheels:
             if done:
+                x0 = jrandom.normal(key, (2, ))*2
                 system.reset(x0)
             system.boundary += tw_increase
 
-    return time_horizon, X, U, C, L, controller
+    return time_horizon, X, U, C, L, P, M, controller
 
 
 def PolicyGradient_step(key, system, controller, learning):

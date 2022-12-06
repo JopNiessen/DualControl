@@ -9,7 +9,7 @@ import jax.random as jrandom
 
 
 class NeuralNet:
-    def __init__(self, key, dimension, activation, eta=1e-2):
+    def __init__(self, key, dimension, activation, eta=1e-4):
         """
         Neural network
         :param key: random key

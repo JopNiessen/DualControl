@@ -13,7 +13,7 @@ import jax.random as jrandom
 
 # For now, it uses time steps (dt) of 1 sec. With x1 = 'velocity in (m/s)'
 class StochasticDoubleIntegrator:
-    def __init__(self, x0, b=1, k=.02, dt=.1, time_horizon=4):
+    def __init__(self, x0, b=1, k=.02, dt=.1, time_horizon=4, boundary=jnp.inf):
         """
         This class describes a 2 dimensional linear dynamical system with gaussian noise
 
@@ -26,7 +26,7 @@ class StochasticDoubleIntegrator:
         self.x = x0
         self.dt = dt
         self.dim = len(x0)
-        self.boundary = jnp.inf
+        self.boundary = boundary
 
         """System parameters"""
         self.A = jnp.array([[0, 1], [0, -k]])
@@ -58,7 +58,7 @@ class StochasticDoubleIntegrator:
         Update state (x) according to: x(n+1) = Ax(n) + Bu(n) + Wxi
         :param u: control (zero if not assigned)
         :param info: [boolean] determines if cost is returned
-        :return: marginal cost
+        :return: state, marginal cost, termination [boolean]
         """
         x_prev = self.x
         self.x = self.get_state_update(key, self.x, u)
