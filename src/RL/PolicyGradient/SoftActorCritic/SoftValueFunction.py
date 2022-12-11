@@ -24,12 +24,7 @@ class SoftValueFunction:
     def loss_fn(self, D, q_func, pi_log_func):
         squared_residual_error = 0
         N = len(D)
-        for it in range(min(N, self.sample_size)):
-            if it == 0:
-                s0, u, _, _ = D[-1]
-            else:
-                idx = np.random.randint(0, N)
-                s0, u, _, _ = D[idx]
+        for s0, u, _, _ in D:
             V = self.predict(s0)
             # Sample u from policy pi
             Q = q_func(s0, u)

@@ -24,12 +24,7 @@ class SoftQFunction:
     def loss_fn(self, D, value_func):
         bellman_residual = 0
         N = len(D)
-        for it in range(min(N, self.sample_size)):
-            if it == 0:
-                s0, u, rew, s1 = D[-1]
-            else:
-                idx = np.random.randint(0, N)
-                s0, u, rew, s1 = D[idx]
+        for s0, u, rew, s1 in D:
             Q = self.predict(s0, u)
             Q_hat = rew + self.gamma * value_func(s1)
             bellman_residual += (Q - Q_hat)**2 / 2
