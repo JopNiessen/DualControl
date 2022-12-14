@@ -130,7 +130,7 @@ class NeuralNet:
         """
         for idx in range(len(self.dim)-1):
             self.params['W' + str(idx)] -= self.eta * grads['dW' + str(idx)]
-            #self.params['b' + str(idx)] -= self.eta * grads['db' + str(idx)]
+            self.params['b' + str(idx)] -= self.eta * grads['db' + str(idx)]
     
     def loss(self, y_hat, y_target):
         """

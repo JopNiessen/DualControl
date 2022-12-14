@@ -22,7 +22,7 @@ class linear_controller:
         self.params = jrandom.normal(key, dim)
         
         self.eta = eta
-        self.stdev = .5
+        self.stdev = .01
 
         self.gamma = .9
         self.eta = eta
@@ -38,10 +38,14 @@ class linear_controller:
     def update(self, y0, u_star, reward, done):
         self.G += self.gamma*self.G + reward
         grad_pi = self.grad_pi(u_star, y0)
-        self.dtheta += grad_pi*self.G
+        self.dtheta += grad_pi*self.G / self.update_interval
         self.it += 1
         if self.it == self.update_interval:
             self.param_update(self.dtheta)
+            self.G = 0
+            self.dtheta = 0
+            self.it = 0
+        if done:
             self.G = 0
             self.dtheta = 0
             self.it = 0
@@ -70,7 +74,8 @@ class linear_controller:
         norm = jnp.linalg.norm(dparams)
         if norm >= .1:
             dparams = .1 * dparams / norm
-        self.params -= dparams
+        self.params += dparams
+        self.params = self.params / jnp.linalg.norm(self.params)
     
     def pi(self, params, u, s):
         """

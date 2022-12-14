@@ -32,7 +32,7 @@ class SoftValueFunction:
         #self.predict = eqx.filter_jit(self._predict)
     
     @eqx.filter_jit
-    def loss_fn(self, model, D, q_func, pi_log_func, get_control, key):
+    def loss_fn(self, model, D_state, D_control, q_func, pi_log_func, get_control, key):
         """
         Calculate squared residual error
         :input model: Value-network
@@ -43,19 +43,26 @@ class SoftValueFunction:
         :input key: PRNGKey
         :return: loss
         """
-        squared_residual_error = 0
-        N = len(D)
-        # loops over replay buffer
-        for s0_a, s0_b, u, _, _, _ in D:
-            s0 = jnp.array([s0_a, s0_b])
-            V = model(s0)
-            #u, _ = get_control(s0, key)
-            Q = q_func(s0, u)
-            log_pi = pi_log_func(s0, u)
-            squared_residual_error += (V - (Q - log_pi))**2 / 2
-        return jnp.mean(squared_residual_error / N)
+        V = jax.vmap(model)(D_state)
+        Q = jax.vmap(q_func)(D_state, D_control)
+        log_pi = pi_log_func(D_state, D_control)
+        residual_error = jnp.mean((V - (Q - log_pi))**2 / 2)
+        return residual_error
 
-    def take_step(self, D, q_func, pi_log_func, get_control, key):
+        # squared_residual_error = 0
+        # N = len(D)
+        # # loops over replay buffer
+        # for s0_a, s0_b, u, _, _, _ in D:
+        #     s0 = jnp.array([s0_a, s0_b])
+        #     V = model(s0)
+        #     #u, _ = get_control(s0, key)
+        #     Q = q_func(s0, u)
+        #     log_pi = pi_log_func(s0, u)
+        #     squared_residual_error += (V - (Q - log_pi))**2 / 2
+        # return jnp.mean(squared_residual_error / N)
+
+    #@eqx.filter_jit
+    def take_step(self, D_state, D_control, q_func, pi_log_func, get_control, key):
         """
         Update Value-network parameters
         :input D: Replay buffer
@@ -65,7 +72,7 @@ class SoftValueFunction:
         :input key: PRNGKey
         :return: loss
         """
-        loss, grads = self.grad(self.loss_fn)(self.model, D, q_func, pi_log_func, get_control, key)
+        loss, grads = self.grad(self.loss_fn)(self.model, D_state, D_control, q_func, pi_log_func, get_control, key)
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss

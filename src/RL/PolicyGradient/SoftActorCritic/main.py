@@ -57,18 +57,8 @@ class SoftActorCritic:
         state, control, reward, new_state = state_transition
         #reward = max(reward, -self.max_cost) / self.max_cost + 1 # scale reward between [0,1]
         self.ReplayBuffer.store((state, control, reward, new_state))
-        #D = self.ReplayBuffer.sample_batch(10)
-
-        #value_v = self.SVF.predict(state, output_value=True)
-        #value_q1 = self.SQF_1.predict(state, control, output_value=True)
-        #value_q2 = self.SQF_2.predict(state, control, output_value=True)
         
         self.train(key, batch_size=self.batch_size)
-
-        # loss_v = self.SVF.take_step(D, self.q_value, self.PI.log_prob, self.get_control, key)
-        # loss_q1 = self.SQF_1.take_step(D, self.SVF.predict)
-        # loss_q2 = self.SQF_2.take_step(D, self.SVF.predict)
-        # loss_pi = self.PI.take_step(D, self.q_value, key)
 
         if tracking:
             self.tracker.add([state[0], state[1], control, -reward])
@@ -82,10 +72,10 @@ class SoftActorCritic:
 
     def train_step(self, key, batch_size=10):
         D = self.ReplayBuffer.sample_batch(batch_size)
-        loss_v = self.SVF.take_step(D, self.q_value, self.PI.log_prob, self.get_control, key)
+        loss_v = self.SVF.take_step(D[:,:self.n_states], D[:,self.n_states:self.n_states+self.n_ctrl], self.q_value, self.PI.log_prob, self.get_control, key)
         loss_q1 = self.SQF_1.take_step(D, self.SVF.predict)
         loss_q2 = self.SQF_2.take_step(D, self.SVF.predict)
-        loss_pi = self.PI.take_step(D, self.q_value, key)
+        loss_pi = self.PI.take_step(D[:,:self.n_states], self.q_value, key)
         return loss_v, loss_q1, loss_q2, loss_pi
         
 

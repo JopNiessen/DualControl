@@ -50,6 +50,7 @@ class SoftQFunction:
             bellman_residual += (Q - Q_hat)**2 / 2
         return jnp.mean(bellman_residual / N)
     
+    #@eqx.filter_jit
     def take_step(self, D, value_func):
         """
         Update Q-network parameters

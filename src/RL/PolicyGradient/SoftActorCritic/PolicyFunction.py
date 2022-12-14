@@ -6,6 +6,7 @@ Soft Actor-Critic: Policy function
 from src.NeuralNetwork.Equinox import SimpleNetwork
 
 # import global libraries
+import jax
 import jax.numpy as jnp
 import jax.random as jrandom
 import equinox as eqx
@@ -56,21 +57,28 @@ class SoftPolicyFunction:
         :input key: PRNGKey
         :return: loss
         """
-        N = len(D)
-        loss = 0
-        for s0, s1, _, _, _, _ in D:
-            state = jnp.array([s0, s1])
-            (mu, sigma) = model(state)
-            control, log_probs = self.sample_control(mu, sigma, key)
+        output = jax.vmap(model)(D)
+        mu = output[:,0]
+        sigma = output[:,1]
+        control, log_prob = self.sample_control(mu, sigma, key)
+        q_value = jax.vmap(q_func)(D, control)
+        loss = jnp.mean(log_prob - q_value)
+        
+        # N = len(D)
+        # loss = 0
+        # for s0, s1, _, _, _, _ in D:
+        #     state = jnp.array([s0, s1])
+        #     (mu, sigma) = model(state)
+        #     control, log_probs = self.sample_control(mu, sigma, key)
 
-            q_value = q_func(state, control)
+        #     q_value = q_func(state, control)
 
-            loss += jnp.mean(log_probs - q_value)
+        #     loss += jnp.mean(log_probs - q_value)
         #entropy = None
 
         # Adding regularization
         #l2_loss = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
-        return loss/N #+ l2_loss
+        return loss #+ l2_loss
 
     def take_step(self, D, q_func, key):
         """
@@ -85,14 +93,19 @@ class SoftPolicyFunction:
         self.model = eqx.apply_updates(self.model, updates)
         return loss
     
-    def log_prob(self, state, control):
+    def log_prob(self, state, control, vmap=True):
         """
         Log probability given control Log p(control|state)
         :input state: state
         :input control: control
         :return: log probability [float]
         """
-        (mu, sigma) = self.model(state)
+        if vmap:
+            output = jax.vmap(self.model)(state)
+            mu = output[:,0]
+            sigma = output[:,1]
+        else:
+            mu, sigma = self.model(state)
         return -.5 * ((control - mu) / sigma)**2 - jnp.log(sigma) + jnp.log(2*jnp.pi)/2
     
     def get_control(self, state, key):
@@ -103,7 +116,7 @@ class SoftPolicyFunction:
         :return: sampled control
         :return: optimal control
         """
-        mu, sigma = self.model(state)
+        (mu, sigma) = self.model(state)
         control = mu + jrandom.normal(key, (1,))*sigma
         return control, mu
 
