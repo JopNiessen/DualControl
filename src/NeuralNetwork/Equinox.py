@@ -44,4 +44,42 @@ class SimpleNetwork(eqx.Module):
         return x + self.bias
 
 
+class ManualNetwork(eqx.Module):
+    """
+    Network based on Equinox
+    """
+    layers: list
+    bias: jnp.ndarray
 
+    def __init__(self, dim, activation, key):
+        """
+        Initialize network
+        :param dim: network dimensions (n_input, n_hidden, n_output)
+        :param key: PRNGKey
+        """
+        self.layers = []
+        N = len(dim)
+        for idx in range(N-1):
+            in_size = dim[idx]
+            out_size = dim[idx+1]
+            self.layers.append(eqx.nn.Linear(in_size, out_size, key=key))
+            self.add_activation_fun(activation[idx])
+            key, _ = jrandom.split(key)
+        self.layers.append(eqx.nn.Linear(dim[-2], dim[-1], key=key))
+        self.bias = jnp.ones(dim[-1])
+    
+    def add_activation_fun(self, activ):
+        if activ == 'relu':
+            self.layers.append(jax.nn.relu)
+        else:
+            pass
+
+    def __call__(self, x):
+        """
+        Forward propagation
+        :param x: input
+        :return: network output
+        """
+        for layer in self.layers:
+            x = layer(x)
+        return x + self.bias

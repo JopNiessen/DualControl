@@ -3,7 +3,7 @@ Soft Actor-Critic: Policy function
 """
 
 # import local libraries
-from src.NeuralNetwork.Equinox import SimpleNetwork
+from src.NeuralNetwork.Equinox import *
 
 # import global libraries
 import jax
@@ -25,7 +25,8 @@ class SoftPolicyFunction:
         :param eta: learning rate
         """
         n_states, n_controls = dim
-        self.model = SimpleNetwork((n_states, 32, n_controls*2), key)
+        #self.model = SimpleNetwork((n_states, 32, n_controls*2), key)
+        self.model = ManualNetwork((n_states, n_controls*2), ('none'), key) # linear model
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
 
