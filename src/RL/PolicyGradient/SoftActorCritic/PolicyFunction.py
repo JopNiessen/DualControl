@@ -29,17 +29,15 @@ class SoftPolicyFunction:
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
 
-        # create jit function
+        # create manual function
         self.grad = eqx.filter_value_and_grad
-        #self.get_control = eqx.filter_jit(self._get_control)
-        #self.sample_control = eqx.filter_jit(self._sample_control)
    
     def sample_control(self, mu, sigma, key):
         """
         Sample control
-        :input mu: optimal control (network output)
-        :input sigma: standard deviation (network output)
-        :input key: PRNGKey
+        :param mu: optimal control (network output)
+        :param sigma: standard deviation (network output)
+        :param key: PRNGKey
         :return: sampled control
         :return: log probability
         """
@@ -51,10 +49,10 @@ class SoftPolicyFunction:
     def loss_fn(self, model, D, q_func, key):
         """
         Calculate loss
-        :input model: policy network
-        :input D: replay buffer
-        :input q_func: Q-function [function]
-        :input key: PRNGKey
+        :param model: policy network
+        :param D: replay buffer
+        :param q_func: Q-function [function]
+        :param key: PRNGKey
         :return: loss
         """
         output = jax.vmap(model)(D)
@@ -64,28 +62,18 @@ class SoftPolicyFunction:
         q_value = jax.vmap(q_func)(D, control)
         loss = jnp.mean(log_prob - q_value)
         
-        # N = len(D)
-        # loss = 0
-        # for s0, s1, _, _, _, _ in D:
-        #     state = jnp.array([s0, s1])
-        #     (mu, sigma) = model(state)
-        #     control, log_probs = self.sample_control(mu, sigma, key)
-
-        #     q_value = q_func(state, control)
-
-        #     loss += jnp.mean(log_probs - q_value)
         #entropy = None
 
         # Adding regularization
         #l2_loss = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
-        return loss #+ l2_loss
+        return loss
 
     def take_step(self, D, q_func, key):
         """
         Update policy network parameters
-        :input D: replay buffer
-        :input q_func: Q-function [function]
-        :input key: PRNGKey
+        :param D: replay buffer (only state values)
+        :param q_func: Q-function [function]
+        :param key: PRNGKey
         :return: loss
         """
         loss, grads = self.grad(self.loss_fn)(self.model, D, q_func, key)
@@ -96,23 +84,28 @@ class SoftPolicyFunction:
     def log_prob(self, state, control, vmap=True):
         """
         Log probability given control Log p(control|state)
-        :input state: state
-        :input control: control
+        :param state: state
+        :param control: control
+        :param vmap: indicate if function should use vector mapping [boolean]
         :return: log probability [float]
         """
         if vmap:
             output = jax.vmap(self.model)(state)
             mu = output[:,0]
             sigma = output[:,1]
+            return self.log_prob_fn(control[:,0], mu, sigma)
         else:
             mu, sigma = self.model(state)
-        return -.5 * ((control - mu) / sigma)**2 - jnp.log(sigma) + jnp.log(2*jnp.pi)/2
+            return self.log_prob_fn(control, mu, sigma)
     
+    def log_prob_fn(self, x, mu, sigma):
+        return -.5 * ((x - mu) / sigma)**2 - jnp.log(sigma) + jnp.log(2*jnp.pi)/2
+
     def get_control(self, state, key):
         """
         Fetch control
-        :input state: state
-        :input key: PRNGKey
+        :param state: state
+        :param key: PRNGKey
         :return: sampled control
         :return: optimal control
         """

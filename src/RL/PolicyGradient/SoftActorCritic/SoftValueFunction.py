@@ -27,20 +27,20 @@ class SoftValueFunction:
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
 
-        # create jit function
+        # create manual function
         self.grad = eqx.filter_value_and_grad
-        #self.predict = eqx.filter_jit(self._predict)
     
     @eqx.filter_jit
     def loss_fn(self, model, D_state, D_control, q_func, pi_log_func, get_control, key):
         """
         Calculate squared residual error
-        :input model: Value-network
-        :input D: Replay buffer
-        :input q_func: Q-function [function]
-        :input pi_log_func: log P(control|state) [function]
-        :input get_control: policy function that samples a control [function]
-        :input key: PRNGKey
+        :param model: Value-network
+        :param D_state: replay buffer (state values)
+        :param D_control: replay buffer (control values)
+        :param q_func: Q-function [function]
+        :param pi_log_func: log P(control|state) [function]
+        :param get_control: policy function that samples a control [function]
+        :param key: PRNGKey
         :return: loss
         """
         V = jax.vmap(model)(D_state)
@@ -49,27 +49,15 @@ class SoftValueFunction:
         residual_error = jnp.mean((V - (Q - log_pi))**2 / 2)
         return residual_error
 
-        # squared_residual_error = 0
-        # N = len(D)
-        # # loops over replay buffer
-        # for s0_a, s0_b, u, _, _, _ in D:
-        #     s0 = jnp.array([s0_a, s0_b])
-        #     V = model(s0)
-        #     #u, _ = get_control(s0, key)
-        #     Q = q_func(s0, u)
-        #     log_pi = pi_log_func(s0, u)
-        #     squared_residual_error += (V - (Q - log_pi))**2 / 2
-        # return jnp.mean(squared_residual_error / N)
-
-    #@eqx.filter_jit
     def take_step(self, D_state, D_control, q_func, pi_log_func, get_control, key):
         """
         Update Value-network parameters
-        :input D: Replay buffer
-        :input q_func: Q-function [function]
-        :input pi_log_func: log P(control|state) [function]
-        :input get_control: policy function that samples a control [function]
-        :input key: PRNGKey
+        :param D_state: replay buffer (state values)
+        :param D_control: replay buffer (control values)
+        :param q_func: Q-function [function]
+        :param pi_log_func: log P(control|state) [function]
+        :param get_control: policy function that samples a control [function]
+        :param key: PRNGKey
         :return: loss
         """
         loss, grads = self.grad(self.loss_fn)(self.model, D_state, D_control, q_func, pi_log_func, get_control, key)
@@ -80,8 +68,8 @@ class SoftValueFunction:
     def predict(self, state, output_value=False):
         """
         Estimate state-value
-        :input state: state
-        :input output_value: indicate if output should be [float] (True) or [DeviceArray] (False)
+        :param state: state
+        :param output_value: indicate if output should be [float] (True) or [DeviceArray] (False)
         :return: state-value [float] or [DeviceArray]
         """
         if output_value:

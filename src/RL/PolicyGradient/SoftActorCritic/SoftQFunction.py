@@ -6,6 +6,7 @@ Soft Actor-Critic: Q-function
 from src.NeuralNetwork.Equinox import SimpleNetwork
 
 # import grobal libraries
+import jax
 import jax.numpy as jnp
 import equinox as eqx
 import optax
@@ -27,38 +28,35 @@ class SoftQFunction:
         self.opt_state = self.optimizer.init(self.model)
         self.gamma = .9
     
-        # create jit function
+        # create manual functions
         self.grad = eqx.filter_value_and_grad
     
     @eqx.filter_jit
-    def loss_fn(self, model, D, value_func):
+    def loss_fn(self, model, D_full_state0, D_reward, D_state1, value_func):
         """
         Calculate bellman residual loss
-        :input model: Q-network
-        :input D: Replay buffer
-        :input value_func: value function [function]
+        :param model: Q-network
+        :param D_full_state0: replay buffer (state & control values)
+        :param D_reward: replay buffer (reward values)
+        :param D_state1: replay buffer (new state value)
+        :param value_func: value function [function]
         :return: loss
         """
-        bellman_residual = 0
-        N = len(D)
-        # Loops over replay buffer
-        for s0_a, s0_b, u, rew, s1_a, s1_b in D:
-            input = jnp.array([s0_a, s0_b, u])
-            s1 = jnp.array([s1_a, s1_b])
-            Q = model(input)
-            Q_hat = rew + self.gamma * value_func(s1)
-            bellman_residual += (Q - Q_hat)**2 / 2
-        return jnp.mean(bellman_residual / N)
+        Q = jax.vmap(model)(D_full_state0)
+        Q_hat = D_reward[:,0] + self.gamma * jax.vmap(value_func)(D_state1)
+        bellman_residual = jnp.mean((Q - Q_hat)**2 / 2)
+        return bellman_residual
     
-    #@eqx.filter_jit
-    def take_step(self, D, value_func):
+    def take_step(self, D_full_state0, D_reward, D_state1, value_func):
         """
         Update Q-network parameters
-        :input D: replay buffer
-        :input value_func: value function [function]
+        :param D_full_state0: replay buffer (state & control values)
+        :param D_reward: replay buffer (reward values)
+        :param D_state1: replay buffer (new state value)
+        :param value_func: value function [function]
         :return loss
         """
-        loss, grads = self.grad(self.loss_fn)(self.model, D, value_func)
+        loss, grads = self.grad(self.loss_fn)(self.model, D_full_state0, D_reward, D_state1, value_func)
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss
@@ -66,10 +64,10 @@ class SoftQFunction:
     def predict(self, state, control, output_value=False, reverse_order=False):
         """
         Estimate Q-value
-        :input state: state
-        :input control: control
-        :input output_value: indicate if output should be [float] (True) or [DeviceArray] (False)
-        :input reverse_order: switch state-control order [boolean]
+        :param state: state
+        :param control: control
+        :param output_value: indicate if output should be [float] (True) or [DeviceArray] (False)
+        :param reverse_order: switch state-control order [boolean]
         :return: Q-value [float] or [DeviceArray]
         """
         if reverse_order:

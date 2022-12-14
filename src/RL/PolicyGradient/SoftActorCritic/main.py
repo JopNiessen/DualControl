@@ -48,22 +48,44 @@ class SoftActorCritic:
         self.max_cost = 50
     
     def q_value(self, state, control, output_value=True):
+        """
+        Calculate minimal q_value (accelerates learning)
+        :param state: state
+        :param control: control
+        :param output_value: indicate if output should be [float] (True) or [DeviceArray] (False)
+        :return: minimal Q-value
+        """
         q1 = self.SQF_1.predict(state, control, output_value=output_value)
         q2 = self.SQF_2.predict(state, control, output_value=output_value)
         Q = jax.lax.min(q1, q2)
         return Q
 
     def update(self, state_transition, key, tracking=True):
+        """
+        Update SAC
+        :param state_transition: (state, control, reward, new state) [tuple]
+        :param key: PRNGKey
+        :param tracking: boolean indicates if states are saved [boolean]
+        """
+        
+        # reward normalization
         state, control, reward, new_state = state_transition
         #reward = max(reward, -self.max_cost) / self.max_cost + 1 # scale reward between [0,1]
+
         self.ReplayBuffer.store((state, control, reward, new_state))
-        
         self.train(key, batch_size=self.batch_size)
 
         if tracking:
             self.tracker.add([state[0], state[1], control, -reward])
     
     def train(self, key, batch_size=5, n_epochs=1, show=False):
+        """
+        train SAC components
+        :param key: PRNGKey
+        :param batch_size: batch size [int]
+        :param n_epochs: number of epochs [int]
+        :param show: indicate if loss is shown [boolean]
+        """
         for epoch in range(n_epochs):
             key, _ = jrandom.split(key)
             loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
@@ -71,18 +93,43 @@ class SoftActorCritic:
                 print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
 
     def train_step(self, key, batch_size=10):
+        """
+        One epoch SAC training
+        :param key: PRNGKey
+        :param batch_size: batch size [int]
+        """
+        # sample from buffer
         D = self.ReplayBuffer.sample_batch(batch_size)
-        loss_v = self.SVF.take_step(D[:,:self.n_states], D[:,self.n_states:self.n_states+self.n_ctrl], self.q_value, self.PI.log_prob, self.get_control, key)
-        loss_q1 = self.SQF_1.take_step(D, self.SVF.predict)
-        loss_q2 = self.SQF_2.take_step(D, self.SVF.predict)
-        loss_pi = self.PI.take_step(D[:,:self.n_states], self.q_value, key)
-        return loss_v, loss_q1, loss_q2, loss_pi
-        
 
+        # update SAC components
+        loss_v = self.SVF.take_step(D[:,:self.n_states], D[:,self.n_states:self.n_states+self.n_ctrl], self.q_value, self.PI.log_prob, self.get_control, key)
+        loss_q1 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
+                            D[:, self.n_states+self.n_ctrl:-self.n_states],
+                            D[:, -self.n_states:],
+                            self.SVF.predict)
+        loss_q2 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
+                            D[:, self.n_states+self.n_ctrl:-self.n_states],
+                            D[:, -self.n_states:],
+                            self.SVF.predict)
+        loss_pi = self.PI.take_step(D[:,:self.n_states], self.q_value, key)
+
+        return loss_v, loss_q1, loss_q2, loss_pi
+
+    def get_control(self, state, key):
+        """
+        Infere control
+        :param state: state
+        :param key: PRNGKey
+        :return: control
+        """
+        return self.PI.get_control(state, key)        
+
+
+"""
     def bind(self, state):
         state[state > self.amplitude] = self.amplitude
         state[state < -self.amplitude] = -self.amplitude
         return tuple((self.factor * state / (self.amplitude) - .5).astype(int) + self.factor)
 
-    def get_control(self, state, key):
-        return self.PI.get_control(state, key)
+"""
+
