@@ -39,10 +39,11 @@ class SoftActorCritic:
         
         # Build replay buffer
         self.ReplayBuffer = ReplayBuffer(buffer_size, n_states, n_controls, key)
+        self.batch_size = 5
 
         # Build state tracking
-        self.tracker = Tracker(['state0', 'state1', 'control', 'cost', 'V_value', 'V_loss', 
-                                    'Q_value', 'Q_loss', 'policy_angle', 'policy_force'])
+        self.tracker = Tracker(['state0', 'state1', 'control', 'cost'])
+        
         # Normalization
         self.max_cost = 50
     
@@ -54,25 +55,40 @@ class SoftActorCritic:
 
     def update(self, state_transition, key, tracking=True):
         state, control, reward, new_state = state_transition
-        #reward = max(reward, -self.max_cost) / self.max_cost +1 # scale reward between [0,1]
+        #reward = max(reward, -self.max_cost) / self.max_cost + 1 # scale reward between [0,1]
         self.ReplayBuffer.store((state, control, reward, new_state))
-        D = self.ReplayBuffer.sample_batch(10)
+        #D = self.ReplayBuffer.sample_batch(10)
 
-        value_v = self.SVF.predict(state, output_value=True)
-        value_q1 = self.SQF_1.predict(state, control, output_value=True)
-        value_q2 = self.SQF_2.predict(state, control, output_value=True)
+        #value_v = self.SVF.predict(state, output_value=True)
+        #value_q1 = self.SQF_1.predict(state, control, output_value=True)
+        #value_q2 = self.SQF_2.predict(state, control, output_value=True)
         
+        self.train(key, batch_size=self.batch_size)
+
+        # loss_v = self.SVF.take_step(D, self.q_value, self.PI.log_prob, self.get_control, key)
+        # loss_q1 = self.SQF_1.take_step(D, self.SVF.predict)
+        # loss_q2 = self.SQF_2.take_step(D, self.SVF.predict)
+        # loss_pi = self.PI.take_step(D, self.q_value, key)
+
+        if tracking:
+            self.tracker.add([state[0], state[1], control, -reward])
+    
+    def train(self, key, batch_size=5, n_epochs=1, show=False):
+        for epoch in range(n_epochs):
+            key, _ = jrandom.split(key)
+            loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
+            if show:
+                print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
+
+    def train_step(self, key, batch_size=10):
+        D = self.ReplayBuffer.sample_batch(batch_size)
         loss_v = self.SVF.take_step(D, self.q_value, self.PI.log_prob, self.get_control, key)
         loss_q1 = self.SQF_1.take_step(D, self.SVF.predict)
         loss_q2 = self.SQF_2.take_step(D, self.SVF.predict)
-        loss_pi = self.PI.take_step(state, self.q_value, key)
+        loss_pi = self.PI.take_step(D, self.q_value, key)
+        return loss_v, loss_q1, loss_q2, loss_pi
+        
 
-        if tracking:
-            control_angle = None #jnp.arctan2(self.PI.params[0,0], self.PI.params[0,1])
-            control_force = None #jnp.linalg.norm(self.PI.params)
-            self.tracker.add([state[0], state[1], control, -reward, value_v, loss_v, value_q1, loss_q1,
-                                    control_angle, control_force])
-    
     def bind(self, state):
         state[state > self.amplitude] = self.amplitude
         state[state < -self.amplitude] = -self.amplitude

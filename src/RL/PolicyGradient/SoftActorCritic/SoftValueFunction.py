@@ -46,10 +46,10 @@ class SoftValueFunction:
         squared_residual_error = 0
         N = len(D)
         # loops over replay buffer
-        for s0_a, s0_b, _, _, _, _ in D:
+        for s0_a, s0_b, u, _, _, _ in D:
             s0 = jnp.array([s0_a, s0_b])
             V = model(s0)
-            u, _ = get_control(s0, key)
+            #u, _ = get_control(s0, key)
             Q = q_func(s0, u)
             log_pi = pi_log_func(s0, u)
             squared_residual_error += (V - (Q - log_pi))**2 / 2

@@ -10,8 +10,8 @@ import jax.random as jrandom
 class ReplayBuffer():
     """
     Replay buffer for off-policy learing
-    
-    Alteration on publicly available module. Original module can be found on: PLACEHOLDER
+
+    Alteration on publicly available module. Original module can be found on: https://github.com/chisarie/jax-agents/blob/master/jax_agents/common/data_processor.py
     """
 
     def __init__(self, buffer_size, state_dim, action_dim, key):
