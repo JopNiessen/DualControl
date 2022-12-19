@@ -26,7 +26,6 @@ class ReplayBuffer():
         data_point_dim = 2 * state_dim + action_dim + 1
         self.data_points = jnp.zeros((buffer_size, data_point_dim))
         self.ptr, self.size, self.buffer_size = 0, 0, buffer_size
-        return
 
     def store(self, data_tuple):
         """
@@ -37,7 +36,6 @@ class ReplayBuffer():
         self.data_points = self.data_points.at[self.ptr].set(data_point)
         self.ptr = (self.ptr+1) % self.buffer_size
         self.size = min(self.size+1, self.buffer_size)
-        return
 
     def sample_batch(self, batch_size):
         """

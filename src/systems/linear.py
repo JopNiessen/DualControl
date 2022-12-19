@@ -38,7 +38,7 @@ class StochasticDoubleIntegrator:
         """Cost parameters"""
         self.F = jnp.array([[1, 0], [0, 0]])
         self.G = jnp.array([[1, 0], [0, 0]])
-        self.R = .5
+        self.R = 1
         self.T = time_horizon
 
         """Fully observable parameters"""
@@ -89,7 +89,7 @@ class StochasticDoubleIntegrator:
         :param u: control
         :return: marginal cost
         """
-        return x.T @ self.G @ x + self.R * u**2
+        return (x.T @ self.G @ x + self.R * u**2)*self.dt
 
     def final_cost(self, x):
         """

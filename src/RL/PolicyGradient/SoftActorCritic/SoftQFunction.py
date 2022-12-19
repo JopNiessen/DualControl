@@ -31,7 +31,7 @@ class SoftQFunction:
         # create manual functions
         self.grad = eqx.filter_value_and_grad
     
-    @eqx.filter_jit
+    #@eqx.filter_jit
     def loss_fn(self, model, D_full_state0, D_reward, D_state1, value_func):
         """
         Calculate bellman residual loss

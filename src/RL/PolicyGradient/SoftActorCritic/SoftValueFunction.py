@@ -30,7 +30,7 @@ class SoftValueFunction:
         # create manual function
         self.grad = eqx.filter_value_and_grad
     
-    @eqx.filter_jit
+    #@eqx.filter_jit
     def loss_fn(self, model, D_state, D_control, q_func, pi_log_func, get_control, key):
         """
         Calculate squared residual error

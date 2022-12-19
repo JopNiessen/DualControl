@@ -37,15 +37,18 @@ class SoftActorCritic:
         self.SVF = SoftValueFunction((n_states, n_hidden, 1), key_v)
         self.PI = SoftPolicyFunction((n_states, n_controls), key_pi)
         
+        #self.alpha = 0
+
         # Build replay buffer
         self.ReplayBuffer = ReplayBuffer(buffer_size, n_states, n_controls, key)
-        self.batch_size = 5
+        self.batch_size = 10
+        self.n_epochs = 2
 
         # Build state tracking
         self.tracker = Tracker(['state0', 'state1', 'control', 'cost'])
         
         # Normalization
-        self.max_cost = 50
+        self.max_cost = 26
     
     def q_value(self, state, control, output_value=True):
         """
@@ -69,16 +72,16 @@ class SoftActorCritic:
         """
         
         # reward normalization
-        state, control, reward, new_state = state_transition
-        #reward = max(reward, -self.max_cost) / self.max_cost + 1 # scale reward between [0,1]
+        state, control, cost, new_state = state_transition
+        reward = cost_to_normalized_reward(cost) # scale reward between [0,1]
 
         self.ReplayBuffer.store((state, control, reward, new_state))
-        self.train(key, batch_size=self.batch_size)
+        self.train(key, batch_size=self.batch_size, n_epochs=self.n_epochs)
 
         if tracking:
-            self.tracker.add([state[0], state[1], control, -reward])
+            self.tracker.add([state[0], state[1], control, reward])
     
-    def train(self, key, batch_size=5, n_epochs=1, show=False):
+    def train(self, key, batch_size=5, n_epochs=2, show=False):
         """
         train SAC components
         :param key: PRNGKey
@@ -92,7 +95,7 @@ class SoftActorCritic:
             if show:
                 print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
 
-    def train_step(self, key, batch_size=10):
+    def train_step(self, key, batch_size):
         """
         One epoch SAC training
         :param key: PRNGKey
@@ -102,12 +105,14 @@ class SoftActorCritic:
         D = self.ReplayBuffer.sample_batch(batch_size)
 
         # update SAC components
-        loss_v = self.SVF.take_step(D[:,:self.n_states], D[:,self.n_states:self.n_states+self.n_ctrl], self.q_value, self.PI.log_prob, self.get_control, key)
+        loss_v = self.SVF.take_step(D[:,:self.n_states],
+                            D[:,self.n_states:self.n_states+self.n_ctrl],
+                            self.q_value, self.PI.log_prob, self.get_control, key)
         loss_q1 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
                             D[:, self.n_states+self.n_ctrl:-self.n_states],
                             D[:, -self.n_states:],
                             self.SVF.predict)
-        loss_q2 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
+        loss_q2 = self.SQF_2.take_step(D[:, :self.n_states+self.n_ctrl],
                             D[:, self.n_states+self.n_ctrl:-self.n_states],
                             D[:, -self.n_states:],
                             self.SVF.predict)
@@ -123,6 +128,13 @@ class SoftActorCritic:
         :return: control
         """
         return self.PI.get_control(state, key)        
+
+
+
+"""Functions"""
+def cost_to_normalized_reward(x):
+    x = x/4.1
+    return -1*min(x, 1)
 
 
 """
