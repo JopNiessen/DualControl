@@ -23,6 +23,7 @@ class PolicyNetwork(eqx.Module):
     mu_layer: jnp.ndarray
     log_std_layer: jnp.ndarray
     control_lim: jnp.float32
+    alpha: jnp.float32
 
     def __init__(self, dim, activation, key, control_limit=4):
         """
@@ -32,6 +33,7 @@ class PolicyNetwork(eqx.Module):
         """
         self.layers = []
         self.control_lim = control_limit
+        self.alpha = 0
         n_input, n_hidden = 2, 32
 
         N = len(dim)
@@ -71,7 +73,7 @@ class PolicyNetwork(eqx.Module):
         log_prob -= (2*(jnp.log(2) - control - jax.nn.softplus(-2*control)))
         
         control = self.control_lim * jnp.tanh(control)
-        return control, log_prob
+        return control, self.alpha*log_prob
     
     def predict(self, x):
         """
@@ -107,7 +109,7 @@ class SoftPolicyFunction:
         self.optimizer = optax.adam(eta)
         self.opt_state = self.optimizer.init(self.model)
         self.stdev = .5
-        self.alpha = 0
+        #self.alpha = 1
 
         # create manual function
         self.grad = eqx.filter_value_and_grad
@@ -145,7 +147,7 @@ class SoftPolicyFunction:
         #control, log_prob = self.sample_control(mu, sigma, key)
         #control, log_prob = self.sample_regularizerd_control(mu, sigma, key)
         q_value = jax.vmap(q_func)(D, control)
-        loss = jnp.mean(self.alpha*log_prob - q_value)
+        loss = jnp.mean(log_prob - q_value)
         
         #entropy = None
 
@@ -200,13 +202,13 @@ class SoftPolicyFunction:
         :return: sampled control
         :return: optimal control
         """
-        control, log_std = self.model(state, key, deterministic=deterministic)
-        sigma = jnp.exp(log_std)
+        control, log_prob = self.model(state, key, deterministic=deterministic)
+        #sigma = jnp.exp(log_std)
         #sigma = self.stdev
         #if noise:
         #    control = jnp.tanh(mu + jrandom.normal(key, (1,))*sigma)
         #else:
         #    control = jnp.tanh(mu)
-        return control, sigma
+        return control, log_prob
 
 
