@@ -37,8 +37,6 @@ class SoftActorCritic:
         self.SVF = SoftValueFunction((n_states, n_hidden, 1), key_v)
         self.PI = SoftPolicyFunction((n_states, n_controls), key_pi)
         
-        #self.alpha = 0
-
         # Build replay buffer
         self.ReplayBuffer = ReplayBuffer(buffer_size, n_states, n_controls, key)
         self.batch_size = 20
@@ -111,8 +109,7 @@ class SoftActorCritic:
 
         # update SAC components
         loss_v = self.SVF.take_step(D[:,:self.n_states],
-                            D[:,self.n_states:self.n_states+self.n_ctrl],
-                            self.q_value, self.PI.log_prob, self.get_control, key)
+                            self.q_value, self.get_control, key)
         loss_q1 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
                             D[:, self.n_states+self.n_ctrl:-self.n_states],
                             D[:, -self.n_states:],
@@ -140,13 +137,4 @@ class SoftActorCritic:
 def cost_to_normalized_reward(x):
     x = x/4.1 #4.1 equals maximal cost per timestep
     return -min(x, 1)
-
-
-"""
-    def bind(self, state):
-        state[state > self.amplitude] = self.amplitude
-        state[state < -self.amplitude] = -self.amplitude
-        return tuple((self.factor * state / (self.amplitude) - .5).astype(int) + self.factor)
-
-"""
 

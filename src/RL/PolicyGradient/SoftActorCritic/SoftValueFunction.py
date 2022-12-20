@@ -32,7 +32,7 @@ class SoftValueFunction:
         self.grad = eqx.filter_value_and_grad
     
     #@eqx.filter_jit
-    def loss_fn(self, model, D_state, D_control, q_func, pi_log_func, get_control, key):
+    def loss_fn(self, model, D_state, q_func, get_control, key):
         """
         Calculate squared residual error
         :param model: Value-network
@@ -47,22 +47,20 @@ class SoftValueFunction:
         V = jax.vmap(model)(D_state)
         D_control, log_pi = jax.vmap(get_control)(D_state, jrandom.split(key, len(D_state)))
         Q = jax.vmap(q_func)(D_state, D_control)
-        #log_pi = pi_log_func(D_state, D_control)
         residual_error = jnp.mean((V - (Q - log_pi))**2 / 2)
         return residual_error
 
-    def take_step(self, D_state, D_control, q_func, pi_log_func, get_control, key):
+    def take_step(self, D_state, q_func, get_control, key):
         """
         Update Value-network parameters
         :param D_state: replay buffer (state values)
         :param D_control: replay buffer (control values)
         :param q_func: Q-function [function]
-        :param pi_log_func: log P(control|state) [function]
         :param get_control: policy function that samples a control [function]
         :param key: PRNGKey
         :return: loss
         """
-        loss, grads = self.grad(self.loss_fn)(self.model, D_state, D_control, q_func, pi_log_func, get_control, key)
+        loss, grads = self.grad(self.loss_fn)(self.model, D_state, q_func, get_control, key)
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss

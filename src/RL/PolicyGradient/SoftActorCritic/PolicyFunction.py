@@ -12,8 +12,6 @@ import jax.random as jrandom
 import equinox as eqx
 import optax
 
-from jax.scipy.stats.norm import logpdf
-
 
 class PolicyNetwork(eqx.Module):
     """
@@ -69,8 +67,7 @@ class PolicyNetwork(eqx.Module):
         else:
             control = mu + std * jrandom.normal(key, (1,))
         
-        log_prob = logpdf(control, loc=mu, scale=std)
-        log_prob -= (2*(jnp.log(2) - control - jax.nn.softplus(-2*control)))
+        log_prob = -.5 * ((control - mu) / std)**2 - jnp.log(std) + jnp.log(2*jnp.pi)/2
         
         control = self.control_lim * jnp.tanh(control)
         return control, self.alpha*log_prob
@@ -103,32 +100,13 @@ class SoftPolicyFunction:
         :param eta: learning rate
         """
         n_states, n_controls = dim
-        #self.model = SimpleNetwork((n_states, 32, n_controls*2), key)
-        #self.model = ManualNetwork((n_states, n_controls*2), ('none'), key) # linear model
         self.model = PolicyNetwork((n_states, n_controls*2), ('none'), key)
         self.optimizer = optax.adam(eta)
         self.opt_state = self.optimizer.init(self.model)
-        self.stdev = .5
-        #self.alpha = 1
 
         # create manual function
         self.grad = eqx.filter_value_and_grad
    
-    def sample_control(self, D, key):
-        """
-        Sample control
-        """
-        control, log_prob = jax.vmap(self.model)(D, key)
-        return control, log_prob
-    
-    def sample_regularizerd_control(self, mu, sigma, key):
-        sigma = self.stdev
-        xi = jrandom.normal(key, (1,))
-        control = jnp.tanh(mu + sigma*xi)
-        log_prob = self.log_prob_fn(control, mu, sigma)
-        return control, log_prob
-
-
     #@eqx.filter_jit
     def loss_fn(self, model, D, q_func, key):
         """
@@ -141,16 +119,9 @@ class SoftPolicyFunction:
         """
         key = jrandom.split(key, len(D))
         control, log_prob = jax.vmap(model)(D, key)
-        #output = jax.vmap(model)(D)
-        #mu = output[:,0]
-        #sigma = output[:,1]
-        #control, log_prob = self.sample_control(mu, sigma, key)
-        #control, log_prob = self.sample_regularizerd_control(mu, sigma, key)
         q_value = jax.vmap(q_func)(D, control)
         loss = jnp.mean(log_prob - q_value)
         
-        #entropy = None
-
         # Adding regularization
         #l2_loss = 0.5 * sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
         return loss
@@ -167,32 +138,6 @@ class SoftPolicyFunction:
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss
-    
-    def log_prob(self, state, control, vmap=True):
-        """
-        Log probability given control Log p(control|state)
-        :param state: state
-        :param control: control
-        :param vmap: indicate if function should use vector mapping [boolean]
-        :return: log probability [float]
-        """
-        if vmap:
-            mu, std = jax.vmap(self.model.predict)(state)
-        else:
-            mu, std = self.model.predict(state)
-        log_prob = logpdf(control, loc=mu, scale=std)
-        log_prob -= (2*(jnp.log(2) - control - jax.nn.softplus(-2*control)))
-        return self.alpha*log_prob
-            #mu = output[:,0]
-            #sigma = output[:,1]
-            #return self.log_prob_fn(control[:,0], mu, sigma)
-        #else:
-            #mu, sigma = self.model(state)
-            #return self.log_prob_fn(control, mu, sigma)
-    
-    def log_prob_fn(self, x, mu, sigma):
-        sigma = self.stdev
-        return -.5 * ((x - mu) / sigma)**2 - jnp.log(sigma) + jnp.log(2*jnp.pi)/2
 
     def get_control(self, state, key, deterministic=False):
         """
@@ -203,12 +148,6 @@ class SoftPolicyFunction:
         :return: optimal control
         """
         control, log_prob = self.model(state, key, deterministic=deterministic)
-        #sigma = jnp.exp(log_std)
-        #sigma = self.stdev
-        #if noise:
-        #    control = jnp.tanh(mu + jrandom.normal(key, (1,))*sigma)
-        #else:
-        #    control = jnp.tanh(mu)
         return control, log_prob
 
 
