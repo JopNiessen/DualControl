@@ -41,11 +41,11 @@ class SoftActorCritic:
 
         # Build replay buffer
         self.ReplayBuffer = ReplayBuffer(buffer_size, n_states, n_controls, key)
-        self.batch_size = 10
-        self.n_epochs = 2
+        self.batch_size = 20
+        self.n_epochs = 1
 
         # Build state tracking
-        self.tracker = Tracker(['state0', 'state1', 'control', 'cost'])
+        self.tracker = Tracker(['state0', 'state1', 'control', 'reward', 'angle'])
         
         # Normalization
         self.max_cost = 26
@@ -79,7 +79,9 @@ class SoftActorCritic:
         self.train(key, batch_size=self.batch_size, n_epochs=self.n_epochs)
 
         if tracking:
-            self.tracker.add([state[0], state[1], control, reward])
+            weights = self.PI.model.mu_layer.weight[0]
+            angle = jnp.arctan2(weights[0], weights[1])
+            self.tracker.add([state[0], state[1], control, reward, angle])
     
     def train(self, key, batch_size=5, n_epochs=2, show=False):
         """
@@ -93,7 +95,10 @@ class SoftActorCritic:
             key, _ = jrandom.split(key)
             loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
             if show:
-                print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
+                weights = self.PI.model.mu_layer.weight[0]
+                angle = angle = jnp.arctan2(weights[0], weights[1])
+                print(f'angle={angle:.3f}')
+                #print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
 
     def train_step(self, key, batch_size):
         """
@@ -133,8 +138,8 @@ class SoftActorCritic:
 
 """Functions"""
 def cost_to_normalized_reward(x):
-    x = x/4.1
-    return -1*min(x, 1)
+    x = x/4.1 #4.1 equals maximal cost per timestep
+    return -min(x, 1)
 
 
 """

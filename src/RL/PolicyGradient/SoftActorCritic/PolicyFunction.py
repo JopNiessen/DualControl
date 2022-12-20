@@ -112,18 +112,11 @@ class SoftPolicyFunction:
         # create manual function
         self.grad = eqx.filter_value_and_grad
    
-    def sample_control(self, mu, sigma, key):
+    def sample_control(self, D, key):
         """
         Sample control
-        :param mu: optimal control (network output)
-        :param sigma: standard deviation (network output)
-        :param key: PRNGKey
-        :return: sampled control
-        :return: log probability
         """
-        sigma = self.stdev
-        control = jnp.tanh(mu + jrandom.normal(key, (1,)) * sigma)
-        log_prob = -.5 * ((control - mu) / sigma)**2 - jnp.log(sigma) + jnp.log(2*jnp.pi)/2
+        control, log_prob = jax.vmap(self.model)(D, key)
         return control, log_prob
     
     def sample_regularizerd_control(self, mu, sigma, key):

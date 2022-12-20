@@ -8,6 +8,7 @@ from src.NeuralNetwork.Equinox import SimpleNetwork
 # import global libraries
 import jax
 import jax.numpy as jnp
+import jax.random as jrandom
 import equinox as eqx
 import optax
 
@@ -44,6 +45,7 @@ class SoftValueFunction:
         :return: loss
         """
         V = jax.vmap(model)(D_state)
+        D_control, _ = jax.vmap(get_control)(D_state, jrandom.split(key, len(D_state)))
         Q = jax.vmap(q_func)(D_state, D_control)
         log_pi = pi_log_func(D_state, D_control)
         residual_error = jnp.mean((V - (Q - log_pi))**2 / 2)
