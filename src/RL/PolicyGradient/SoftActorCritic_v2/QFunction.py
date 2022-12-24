@@ -20,7 +20,7 @@ class SoftQFunction:
         self.opt_state = self.optimizer.init(self.model)
         self.gamma = .9
     
-    @eqx.filter_jit
+    #@eqx.filter_jit
     def loss_fn(self, model, full_state, q_target):
         q0_hat = jax.vmap(model)(full_state)
         bellman_residual = jnp.mean((q0_hat - q_target)**2 / 2)

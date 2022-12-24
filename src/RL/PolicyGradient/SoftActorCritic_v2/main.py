@@ -16,39 +16,29 @@ import jax.random as jrandom
 
 
 class SoftActorCritic:
-    """
-    Soft Actor-Critic
-    """
-    def __init__(self, n_obs, n_controls, key, n_hidden=32, buffer_size=100):
-        """
-        Initialize agent
-        :param n_state: number of states [int]
-        :param n_controls: number of controls [int]
-        :param key: PRNGKey
-        :param n_hidden: number of hidden states
-        :param buffer_size: sice of replay buffer [int]
-        """
-        self.n_obs = n_obs
-        self.n_ctrl = n_controls
+    def __init__(self, observation_size, control_size, key,
+                    lr_v=1e-1, lr_q=1e-1, lr_pi=1e-1,
+                    batch_size=100, n_epochs=1):
+        self.n_obs = observation_size
+        self.n_ctrl = control_size
 
-        key_q1, key_q2, key_v, key_pi = jrandom.split(key, 4)
-        self.SQF_1 = SoftQFunction(n_obs + n_controls, key_q1)
-        self.SQF_2 = SoftQFunction(n_obs + n_controls, key_q2)
-        self.SVF = SoftValueFunction(n_obs, key_v)
-        self.PI = SoftPolicyFunction(n_obs, key_pi)
-        
+        keys = jrandom.split(key, 5)
+        #self.SVF = SoftValueFunction(self.n_obs, keys[0], eta=lr_v)
+        self.SQF_1 = SoftQFunction(self.n_obs + self.n_ctrl, keys[1], eta=lr_q)
+        self.SQF_2 = SoftQFunction(self.n_obs + self.n_ctrl, keys[2], eta=lr_q)
+        self.PI = SoftPolicyFunction(self.n_obs, keys[3], eta=lr_pi)
+
         # Build replay buffer
-        self.ReplayBuffer = ReplayBuffer(buffer_size, n_obs, n_controls, key)
-        self.batch_size = 100
-        self.n_epochs = 1
+        self.ReplayBuffer = ReplayBuffer(buffer_size, observation_size, control_size, keys[4])
+        self.batch_size = batch_size
+        self.n_epochs = n_epochs
 
-        # Build state tracking
+        # Build tracker
         self.tracker = Tracker(['state0', 'state1', 'control', 'reward'])
-        
+
         # Normalization
         self.max_cost = 4.1
     
-    """Functions"""
     def cost_to_normalized_reward(self, x):
         """
         Cost to reward transformation incl. normalization
@@ -57,7 +47,7 @@ class SoftActorCritic:
         """
         x = x/self.max_cost
         return 1 - min(x, 1)*2
-
+    
     def q_func(self, state, control):
         """
         Calculate minimal q_value (accelerates learning)
@@ -70,48 +60,13 @@ class SoftActorCritic:
         q2 = self.SQF_2.predict(state, control)
         Q = jax.lax.min(q1, q2)
         return Q
-
-    def update(self, state_transition, key, tracking=True):
-        """
-        Update SAC
-        :param state_transition: (state, control, reward, new state) [tuple]
-        :param key: PRNGKey
-        :param tracking: boolean indicates if states are saved [boolean]
-        """
-        
-        # reward normalization
-        state, control, cost, new_state = state_transition
-        reward = self.cost_to_normalized_reward(cost) # scale reward between [0,1]
-
-        self.ReplayBuffer.store((state, control, reward, new_state))
-        self.train(key, batch_size=self.batch_size, n_epochs=self.n_epochs)
-
-        if tracking:
-            weights = self.PI.model.mu_layer.weight[0]
-            angle = jnp.arctan2(weights[0], weights[1])
-            self.tracker.add([state[0], state[1], control, reward, angle])
     
-    def train(self, key, batch_size=5, n_epochs=2, show=False):
-        """
-        train SAC components
-        :param key: PRNGKey
-        :param batch_size: batch size [int]
-        :param n_epochs: number of epochs [int]
-        :param show: indicate if loss is shown [boolean]
-        """
-        for epoch in range(n_epochs):
-            key, _ = jrandom.split(key)
-            loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
-            if show:
-                print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
+    def get_control(self, state, key):
+        return self.PI.get_control(state, key)
 
     def train_step(self, key, batch_size):
-        """
-        One epoch SAC training
-        :param key: PRNGKey
-        :param batch_size: batch size [int]
-        """
         keys = jrandom.split(key, 4)
+
         # sample from buffer
         D = self.ReplayBuffer.sample_batch(batch_size)
 
@@ -121,23 +76,36 @@ class SoftActorCritic:
         reward = D[:, self.n_obs+self.n_ctrl:-self.n_obs]
         next_state = D[:, -self.n_obs:]
 
-        loss_v = self.SVF.update(state, self.q_func, self.PI, keys[0])
-        loss_q1 = self.SQF_1.update(full_state, reward,
-                                    next_state, self.PI, keys[1])
-        loss_q2 = self.SQF_2.update(full_state, reward,
-                                    next_state, self.PI, keys[2])
+        # Update
+        loss_v = None #self.SVF.update(state, self.q_func, PI, keys[0])
+        loss_q1 = self.SQF_1.update(full_state, reward, next_state, self.PI, keys[1])
+        loss_q2 = self.SQF_2.update(full_state, reward, next_state, self.PI, keys[2])
         loss_pi = self.PI.update(state, self.q_func, keys[3])
+
         return loss_v, loss_q1, loss_q2, loss_pi
+    
+    def train(self, key, batch_size=100, n_epochs=5, show=False):
+        for epoch in range(n_epochs):
+            key, _ = jrandom.split(key)
+            loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
+            if show:
+                print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
 
-    def get_control(self, state, key):
+    def update(self, state_transition, key, tracking=True):
         """
-        Infere control
-        :param state: state
+        Update SAC
+        :param state_transition: (state, control, reward, new state) [tuple]
         :param key: PRNGKey
-        :return: control
+        :param tracking: boolean indicates if states are saved [boolean]
         """
-        return self.PI.get_control(state, key)        
+        state, control, cost, next_state = state_transition
+        reward = self.cost_to_normalized_reward(cost)
 
+        self.ReplayBuffer.store((state, control, reward, next_state))
+        self.train(key, batch_size=self.batch_size, n_epochs=self.n_epochs)
+
+        if tracking:
+            self.tracker.add([state[0], state[1], control, reward])
 
 
 
