@@ -18,6 +18,7 @@ class SoftPolicyFunction:
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
     
+    @eqx.filter_jit
     def loss_fn(self, model, D, q_func, keys):
         control, log_prob = jax.vmap(model)(D, keys)
         q_value = jax.vmap(q_func)(D, control)

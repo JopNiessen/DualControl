@@ -55,7 +55,8 @@ class SoftValueFunction:
         :param key: PRNGKey
         :return: loss
         """
-        D_control, log_pi = jax.vmap(policy.get_control)(D_state, jrandom.split(key, len(D_state)))
+        keys = jrandom.split(key, len(D_state))
+        D_control, log_pi = jax.vmap(policy.get_control)(D_state, keys)
         V_target = jax.vmap(q_func)(D_state, D_control) - log_pi
         
         loss, grads = eqx.filter_value_and_grad(self.loss_fn)(self.model, D_state, V_target)

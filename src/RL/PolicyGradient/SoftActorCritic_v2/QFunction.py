@@ -20,6 +20,12 @@ class SoftQFunction:
         self.opt_state = self.optimizer.init(self.model)
         self.gamma = .9
     
+    @eqx.filter_jit
+    def loss_fn(self, model, full_state, q_target):
+        q0_hat = jax.vmap(model)(full_state)
+        bellman_residual = jnp.mean((q0_hat - q_target)**2 / 2)
+        return bellman_residual
+    
     def update(self, full_state, reward, next_state, policy, key):
         keys = jrandom.split(key, len(full_state))
         control, log_pi = jax.vmap(policy.get_control)(next_state, keys)
@@ -31,11 +37,6 @@ class SoftQFunction:
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss
-    
-    def loss_fn(self, model, full_state, q_target):
-        q0_hat = jax.vmap(model)(full_state)
-        bellman_residual = jnp.mean((q0_hat - q_target)**2 / 2)
-        return bellman_residual
     
     def predict(self, state, control):
         input = jnp.hstack([state, control])

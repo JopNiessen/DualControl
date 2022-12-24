@@ -39,7 +39,7 @@ class SoftActorCritic:
         
         # Build replay buffer
         self.ReplayBuffer = ReplayBuffer(buffer_size, n_obs, n_controls, key)
-        self.batch_size = 20
+        self.batch_size = 100
         self.n_epochs = 1
 
         # Build state tracking

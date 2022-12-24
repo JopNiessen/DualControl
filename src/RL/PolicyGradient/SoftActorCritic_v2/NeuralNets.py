@@ -17,7 +17,7 @@ class PolicyNetwork(eqx.Module):
     control_lim: jnp.float32
     alpha: jnp.float32
 
-    def __init__(self, in_size, key, control_limit=1):
+    def __init__(self, in_size, key, control_limit=2):
         """
         Initialize network
         :param dim: network dimensions (n_input, ..., n_output)
@@ -58,7 +58,7 @@ class PolicyNetwork(eqx.Module):
         log_std = self.log_std_layer(x)
         std = jnp.exp(log_std)
         if squash:
-            return jnp.tanh(mu), std
+            return jnp.tanh(mu)*self.control_lim, std
         else:
             return mu, std
 
