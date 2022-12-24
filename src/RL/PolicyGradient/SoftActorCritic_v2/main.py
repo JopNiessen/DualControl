@@ -58,7 +58,7 @@ class SoftActorCritic:
         x = x/self.max_cost
         return 1 - min(x, 1)*2
 
-    def q_func(self, state, control, output_value=True):
+    def q_func(self, state, control):
         """
         Calculate minimal q_value (accelerates learning)
         :param state: state
@@ -111,7 +111,7 @@ class SoftActorCritic:
         :param key: PRNGKey
         :param batch_size: batch size [int]
         """
-        keys = jrandom.split(key, 5)
+        keys = jrandom.split(key, 4)
         # sample from buffer
         D = self.ReplayBuffer.sample_batch(batch_size)
 
