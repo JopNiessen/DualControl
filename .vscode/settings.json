@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "/home/jop/PythonProjects/DualControl/src/",
+        "./src/RL/PolicyGradient/SoftActorCritic_v2"
+    ]
+}

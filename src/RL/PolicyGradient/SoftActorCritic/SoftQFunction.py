@@ -26,13 +26,13 @@ class SoftQFunction:
         self.model = SimpleNetwork(dimension, key)
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
-        self.gamma = .9
+        self.gamma = .1
     
         # create manual functions
         self.grad = eqx.filter_value_and_grad
     
     #@eqx.filter_jit
-    def loss_fn(self, model, D_full_state0, D_reward, D_state1, value_func):
+    def loss_fn(self, model, D_full_state0, q_target):
         """
         Calculate bellman residual loss
         :param model: Q-network
@@ -42,9 +42,8 @@ class SoftQFunction:
         :param value_func: value function [function]
         :return: loss
         """
-        Q = jax.vmap(model)(D_full_state0)
-        Q_hat = D_reward[:,0] + self.gamma * jax.vmap(value_func)(D_state1)
-        bellman_residual = jnp.mean((Q - Q_hat)**2 / 2)
+        q_hat = jax.vmap(model)(D_full_state0)
+        bellman_residual = jnp.mean((q_hat - q_target)**2 / 2)
         return bellman_residual
     
     def take_step(self, D_full_state0, D_reward, D_state1, value_func):
@@ -56,7 +55,9 @@ class SoftQFunction:
         :param value_func: value function [function]
         :return loss
         """
-        loss, grads = self.grad(self.loss_fn)(self.model, D_full_state0, D_reward, D_state1, value_func)
+        q_target = D_reward[:,0] + self.gamma * jax.vmap(value_func)(D_state1)
+
+        loss, grads = self.grad(self.loss_fn)(self.model, D_full_state0, q_target)
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.model = eqx.apply_updates(self.model, updates)
         return loss

@@ -16,7 +16,7 @@ class SimpleNetwork(eqx.Module):
     > ReLU activated
     """
     layers: list
-    bias: jnp.ndarray
+    #bias: jnp.ndarray
 
     def __init__(self, dim, key):
         """
@@ -31,7 +31,7 @@ class SimpleNetwork(eqx.Module):
                         eqx.nn.Linear(hidden_size, hidden_size, key=key2),
                         jax.nn.relu,
                         eqx.nn.Linear(hidden_size, out_size, key=key3)]
-        self.bias = jnp.ones(out_size)
+        #self.bias = jnp.ones(out_size)
     
     def __call__(self, x):
         """
@@ -41,7 +41,7 @@ class SimpleNetwork(eqx.Module):
         """
         for layer in self.layers:
             x = layer(x)
-        return x + self.bias
+        return x #+ self.bias
 
 
 class ManualNetwork(eqx.Module):

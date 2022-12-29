@@ -11,7 +11,8 @@ import equinox as eqx
 import optax
 
 # import local libaries
-from src.NeuralNetwork.Equinox import SimpleNetwork
+#from src.NeuralNetwork.Equinox import SimpleNetwork
+from src.RL.PolicyGradient.SoftActorCritic_v2.NeuralNets import QNetwork
 
 
 class SoftQFunction:
@@ -24,8 +25,8 @@ class SoftQFunction:
         :param key: PRNGKey
         :param eta: learning rate [float]
         """
-        self.model = SimpleNetwork((in_size, 32, 1), key)
-        #self.model = QNetwork(in_size, key)
+        #self.model = SimpleNetwork((in_size, 32, 1), key)
+        self.model = QNetwork(in_size, key)
         self.optimizer = optax.sgd(eta)
         self.opt_state = self.optimizer.init(self.model)
         self.gamma = .9

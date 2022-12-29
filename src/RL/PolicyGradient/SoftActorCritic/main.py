@@ -89,13 +89,17 @@ class SoftActorCritic:
         :param n_epochs: number of epochs [int]
         :param show: indicate if loss is shown [boolean]
         """
+        self.SVF_bar = self.SVF
         for epoch in range(n_epochs):
+            if epoch%100 == 0:
+                self.SVF_bar = self.SVF
             key, _ = jrandom.split(key)
             loss_v, loss_q1, loss_q2, loss_pi = self.train_step(key, batch_size=batch_size)
             if show:
                 weights = self.PI.model.mu_layer.weight[0]
-                angle = angle = jnp.arctan2(weights[0], weights[1])
-                print(f'angle={angle:.3f}')
+                #angle = angle = jnp.arctan2(weights[0], weights[1])
+                #print(f'angle={angle:.3f}')
+                print(weights)
                 #print(f'epoch={epoch} \t loss v={loss_v:.3f} \t loss q1={loss_q1:.3f} \t loss q2={loss_q2:.3f} \t loss pi={loss_pi:.3f}')
 
     def train_step(self, key, batch_size):
@@ -108,16 +112,17 @@ class SoftActorCritic:
         D = self.ReplayBuffer.sample_batch(batch_size)
 
         # update SAC components
-        loss_v = self.SVF.take_step(D[:,:self.n_states],
-                            self.q_value, self.get_control, key)
+        loss_v = None
+        #loss_v = self.SVF.take_step(D[:,:self.n_states],
+        #                    self.q_value, self.get_control, key)
         loss_q1 = self.SQF_1.take_step(D[:, :self.n_states+self.n_ctrl],
                             D[:, self.n_states+self.n_ctrl:-self.n_states],
                             D[:, -self.n_states:],
-                            self.SVF.predict)
+                            self.SVF_bar.predict)
         loss_q2 = self.SQF_2.take_step(D[:, :self.n_states+self.n_ctrl],
                             D[:, self.n_states+self.n_ctrl:-self.n_states],
                             D[:, -self.n_states:],
-                            self.SVF.predict)
+                            self.SVF_bar.predict)
         loss_pi = self.PI.take_step(D[:,:self.n_states], self.q_value, key)
 
         return loss_v, loss_q1, loss_q2, loss_pi

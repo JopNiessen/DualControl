@@ -17,42 +17,27 @@ class PolicyNetwork(eqx.Module):
     """
     Network based on Equinox
     """
-    layers: list
     mu_layer: jnp.ndarray
+    #std_layers: list
     log_std_layer: jnp.ndarray
     control_lim: jnp.float32
     alpha: jnp.float32
 
-    def __init__(self, dim, activation, key, control_limit=4):
+    def __init__(self, dim, key, control_limit=1):
         """
         Initialize network
         :param dim: network dimensions (n_input, ..., n_output)
         :param key: PRNGKey
         """
-        self.layers = []
+        key0, key1, key2, key3 = jrandom.split(key, 4)
+        #self.std_layers = [eqx.nn.Linear(dim[0], 32, key=key2),
+        #                    jax.nn.relu,
+        #                    eqx.nn.Linear(32, 1, key=key3)]
         self.control_lim = control_limit
         self.alpha = 0
-        n_input, n_hidden = 2, 32
 
-        N = len(dim)
-        key, subkey = jrandom.split(key)
-        self.mu_layer = eqx.nn.Linear(dim[-2], 1, key=key)
-        self.log_std_layer = eqx.nn.Linear(dim[-2], 1, key=key)
-        #self.log_std_layers = [eqx.nn.Linear(dim[-2], n_hidden, key=subkey),
-        #                        jax.nn.relu,
-        #                        eqx.nn.Linear(n_hidden, dim[-1], key=subkey)]
-        for idx in range(N-1):
-            key, _ = jrandom.split(key)
-            self.layers.append(eqx.nn.Linear(dim[idx], dim[idx+1], key=key))
-            self.add_activation_fun(activation[idx])
-        #self.layers.append(eqx.nn.Linear(dim[-2], dim[-1], key=key))
-        #self.bias = jnp.ones(dim[-1])
-    
-    def add_activation_fun(self, activ):
-        if activ == 'relu':
-            self.layers.append(jax.nn.relu)
-        else:
-            pass
+        self.mu_layer = eqx.nn.Linear(dim[0], 1, key=key0)
+        self.log_std_layer = eqx.nn.Linear(dim[0], 1, key=key1)
 
     def __call__(self, x, key, deterministic=False):
         """
@@ -72,20 +57,22 @@ class PolicyNetwork(eqx.Module):
         control = self.control_lim * jnp.tanh(control)
         return control, self.alpha*log_prob
     
-    def predict(self, x):
+    def predict(self, x, squash=False):
         """
         Forward propagation
         :param x: input
         :return: network output
         """
-        for layer in self.layers:
-            x = layer(x)
         mu = self.mu_layer(x)
+        #for layer in self.std_layers:
+        #    x = layer(x)
+        #log_std = x
         log_std = self.log_std_layer(x)
-        #for layer in self.log_std_layers:
-        #    log_std = layer(x)
         std = jnp.exp(log_std)
-        return mu, std
+        if squash:
+            return jnp.tanh(mu), std
+        else:
+            return mu, std
 
 
 class SoftPolicyFunction:
@@ -100,7 +87,7 @@ class SoftPolicyFunction:
         :param eta: learning rate
         """
         n_states, n_controls = dim
-        self.model = PolicyNetwork((n_states, n_controls*2), ('none'), key)
+        self.model = PolicyNetwork((n_states, n_controls), key)
         self.optimizer = optax.adam(eta)
         self.opt_state = self.optimizer.init(self.model)
 
